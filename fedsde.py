@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+
 import os
 import random
 import json
@@ -20,7 +20,6 @@ from fed_baselines.client_sde import FedSDEClient
 from fed_baselines.server_sde import FedSDEServer
 
 from postprocessing.recorder import Recorder
-# Original baseline dataloaders (might be partially replaced or complemented)
 from preprocessing.baselines_dataloader import divide_data, divide_data_with_dirichlet, divide_data_with_local_cls, load_data
 from utils.models import * # Assumed to import common classifier models like LeNet, ResNet, etc.
 
@@ -45,10 +44,7 @@ temp_fedsde_args, _ = parser_fedsde.parse_known_args()
 for arg_name, arg_value in vars(temp_fedsde_args).items():
     if not hasattr(args, arg_name): # Only add if it doesn't already exist from config
         setattr(args, arg_name, arg_value)
-# <<<<<<<<<<<<<<<<<< FedSDE Specific Code: Add FedSDE Arguments >>>>>>>>>>>>>>>>>>>>
 
-
-# Setup logger
 global logger
 if Logger.logger is None:
     logger = Logger()
@@ -58,8 +54,6 @@ if Logger.logger is None:
     log_config(args)
 
 using_wandb = args.using_wandb
-
-# Clear GPU cache
 torch.cuda.empty_cache()
 
 class PythonObjectEncoder(JSONEncoder):
@@ -174,29 +168,25 @@ def fed_run():
     elif args.client_instance == 'Awesome':
         server = FedAWSServer(args, trainset_config['users'], dataset_id=args.sys_dataset, model_name=args.sys_model)
     elif args.client_instance == 'FedSDE':
-        # FedSDE Server needs a global classifier model and the global public dataloader
         server = FedSDEServer(
             args=args,
-            client_ids=trainset_config['users'],  # Pass client IDs for base class constructor
+            client_ids=trainset_config['users'],  
             dataset_id=args.sys_dataset,
             model_name=args.sys_model,
-            global_public_data_loader=global_public_dataloader# Pass the DataLoader for public data
+            global_public_data_loader=global_public_dataloader
         )
     else:
         raise NotImplementedError('Server initialization error for unknown algorithm.')
 
     server.load_testset(test_dataloader_for_evaluation)
-    server.load_cls_record(cls_record) # Assuming this is still relevant for some baselines/metrics
-
-    # Initialize the clients w.r.t. the federated learning algorithms and the specific federated settings
+    server.load_cls_record(cls_record) # 
     losses = defaultdict(list)
     logger.info('--------------------- Client Configuration and Local Training Stage ---------------------')
     
     
     uploaded_soft_labels_dict = {}
-    all_clients_generated_datasets = [] # New: To collect generated datasets from all clients
+    all_clients_generated_datasets = [] 
     
-    # Loop through clients for initialization and local training
     for client_idx, client_id in enumerate(trainset_config['users']):
         if args.client_instance == 'FedCVAE':
             client_dict[client_id] = FedCVAEClient(args, client_id, epoch=args.client_instance_n_epoch,
@@ -206,26 +196,6 @@ def fed_run():
             _, recon_loss, kld_loss = client_dict[client_id].train(client_dict[client_id].model)
             losses["recon_loss"].append(recon_loss)
             losses["kld_loss"].append(kld_loss)
-        elif args.client_instance == 'Awesome':
-            # Note: Original code had client_class = FedAWSServer, which is likely a typo.
-            # Assuming it should be AwesomeClient.
-            client_dict[client_id] = AwesomeClient(args, client_id, epoch=args.client_instance_n_epoch,
-                                                  dataset_id=args.sys_dataset, model_name=args.sys_model)
-            server.client_dict[client_id] = client_dict[client_id]
-            client_dict[client_id].load_trainset(trainset_config['user_data'][client_id])
-            server.client_model[client_id] = client_dict[client_id].model # Store client's model on server
-            if args.client_model_root is not None and os.path.exists(
-                    os.path.join(args.client_model_root, f"c{client_id}.pt")):
-                weight = torch.load(os.path.join(args.client_model_root, f"c{client_id}.pt"), map_location="cpu")
-                logger.info("Load Client {} from {}".format(client_id, os.path.join(args.client_model_root, f"c{client_id}.pt")))
-                client_dict[client_id].model.load_state_dict(weight)
-            else:
-                c_loss = client_dict[client_id].train(client_dict[client_id].model)
-                if not os.path.exists(os.path.join(args.sys_res_root, args.save_name)):
-                    os.makedirs(os.path.join(args.sys_res_root, args.save_name))
-                if args.save_client_model:
-                    torch.save(client_dict[client_id].model.state_dict(), os.path.join(args.sys_res_root, args.save_name, f"c{client_id}.pt"))
-                losses["client_loss"].append(c_loss)
         elif args.client_instance in ['DENSE', 'ENSEMBLE', "CoBoost", "DAFL", "ADI", "FedAVG"]:
             logger.info(f'--------------------- Client {client_id} Training stage ---------------------')
             client_class = EnsembleClient # This is the base client for these algos
@@ -256,7 +226,7 @@ def fed_run():
             client_dict[client_id] = FedSDEClient(
                 args=args,
                 client_id=client_id,
-                epoch=args.local_epochs, # Use local_epochs for client training
+                epoch=args.local_epochs, 
                 dataset_id=args.sys_dataset,
                 model_name=args.sys_model,
                 private_data_loader=private_data_loader_for_client, # Dataloader for client's private training data
@@ -269,19 +239,16 @@ def fed_run():
             server.client_model[client_id] = client_dict[client_id].model
 
             logger.info(f"Client {client_id}: Executing FedSDE local tasks (diffusion, self-distillation, soft label generation)...")
-            # Call the `train` method of FedSDEClient, which encapsulates the entire pipeline
             soft_labels ,hard_sample_dataset = client_dict[client_id].train() # The train method of FedSDEClient returns soft_labels AND hard_sample_dataset
 
             
             uploaded_soft_labels_dict[client_id] = soft_labels
             
-            # Collect the generated dataset
             if isinstance(hard_sample_dataset, TensorDataset):
                 all_clients_generated_datasets.append(hard_sample_dataset)
             else:
                 logger.warning(f"Client {client_id}: hard_sample_dataset is not a TensorDataset. Cannot collect generated data.")
             
-        # <<<<<<<<<<<<<<<<<< FedSDE Specific Code: Client Initialization & Local Task Execution >>>>>>>>>>>>>>>>>>>>
         else:
             raise NotImplementedError("Client instance is not supported")
 
