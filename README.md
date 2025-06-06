@@ -15,6 +15,8 @@ Run the following command to install the required packages:
 
 `pip install -r requirements.txt` 
 ## Run Code
+
+For example, to reproduce the results of the CIFAR-10 dataset with alpha = 0.6 (Table 2) and 10 clients, you can use the following bash code
 ```bash
 # bash
 bash shells/cifar10_fedsde.sh
