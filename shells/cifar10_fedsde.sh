@@ -1,7 +1,7 @@
 
-nc=5 # number of clients
+nc=10 # number of clients
 dda=0.6 # dirichlet dataset alpha
-md=Conv4 # Conv5 or ResNet18
+md=ResNet18 # Conv5 or ResNet18
 cuda=1 # cuda id
 
 python fedsde.py \
