@@ -1,5 +1,5 @@
 # FedSDE
-The official code repository for the submission ICDM paper
+The official code repository for the submission BigData paper
 
 ## Installation
 
