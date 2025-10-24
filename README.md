@@ -1,5 +1,5 @@
 # FedSDE
-The official code repository for the IEEE BigData 2025: 
+The official code repository for the IEEE BigData 2025 Regular Paper: 
 
 **FedSDE: Self-Distillation with Diffusion Enhanced for One-shot Federated Learning**
 
